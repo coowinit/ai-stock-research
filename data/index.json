@@ -1,5 +1,5 @@
 {
-  "version": "0.4.0",
+  "version": "1.0.0",
   "updated": "2026-08-06",
   "default": "global-01",
   "groups": [
@@ -84,6 +84,17 @@
       "key": "stocks",
       "title": "重点股票",
       "items": [
+        {
+          "id": "stock-ai-template",
+          "file": "stocks/重点股票AI研究模板.md",
+          "title": "重点股票AI研究模板",
+          "icon": "📄",
+          "keywords": [
+            "模板",
+            "股票研究"
+          ],
+          "updated": "2026-08-06"
+        },
         {
           "id": "stock-601138",
           "file": "stocks/601138-工业富联.md",

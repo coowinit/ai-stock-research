@@ -226,7 +226,7 @@
       const response = await fetch('data/index.json', { cache: 'no-store' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       state.manifest = await response.json();
-      els.topbarMeta.textContent = `个人长期积累 · Markdown 驱动 · v${state.manifest.version || '0.4.0'}`;
+      els.topbarMeta.textContent = `个人长期积累 · Markdown 驱动 · v${state.manifest.version || '1.0.0'}`;
 
       const requested = location.hash.replace(/^#/, '');
       const initialId = findItem(requested) ? requested : (state.manifest.default || getAllItems()[0]?.id);
