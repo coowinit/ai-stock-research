@@ -452,3 +452,14 @@ button { color: inherit; }
   .markdown-body h2 { margin-top: 27px; font-size: 17px; }
   .markdown-body blockquote { padding: 11px 13px; }
 }
+
+/* v1.1.0: daily Markdown auto-discovery status */
+.nav-note {
+  margin: 4px 13px 8px 25px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.55;
+}

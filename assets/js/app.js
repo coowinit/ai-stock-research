@@ -5,7 +5,8 @@
     manifest: null,
     currentId: '',
     collapsed: {},
-    query: ''
+    query: '',
+    dailyDiscoveryError: ''
   };
 
   const els = {
@@ -19,7 +20,7 @@
   };
 
   function escapeHtml(value = '') {
-    return String(value).replace(/[&<>'"]/g, (char) => ({
+    return String(value).replace(/[&<>'"]/g, char => ({
       '&': '&amp;',
       '<': '&lt;',
       '>': '&gt;',
@@ -32,10 +33,12 @@
     return String(value).trim().toLowerCase();
   }
 
-  function getAllItems() {
-    if (!state.manifest) return [];
+  function getGroups() {
+    return state.manifest?.groups || [];
+  }
 
-    return state.manifest.groups.flatMap(group =>
+  function getAllItems() {
+    return getGroups().flatMap(group =>
       group.items.map(item => ({
         ...item,
         groupKey: group.key,
@@ -50,8 +53,7 @@
 
   function loadCollapsedState() {
     try {
-      state.collapsed =
-        JSON.parse(localStorage.getItem('asr-collapsed') || '{}') || {};
+      state.collapsed = JSON.parse(localStorage.getItem('asr-collapsed') || '{}') || {};
     } catch (_) {
       state.collapsed = {};
     }
@@ -59,32 +61,21 @@
 
   function saveCollapsedState() {
     try {
-      localStorage.setItem(
-        'asr-collapsed',
-        JSON.stringify(state.collapsed)
-      );
+      localStorage.setItem('asr-collapsed', JSON.stringify(state.collapsed));
     } catch (_) {}
   }
 
-  /**
-   * 只展开指定的大类
-   * 其他所有大类自动收起
-   */
   function showOnlyGroup(activeKey) {
-    const groups = state.manifest?.groups || [];
-
-    groups.forEach(group => {
+    getGroups().forEach(group => {
       state.collapsed[group.key] = group.key !== activeKey;
     });
   }
 
   function renderNav() {
     const query = normalize(state.query);
-    const groups = state.manifest?.groups || [];
-
     let visibleCount = 0;
 
-    els.navTree.innerHTML = groups.map(group => {
+    els.navTree.innerHTML = getGroups().map(group => {
       const items = group.items.filter(item => {
         if (!query) return true;
 
@@ -100,22 +91,10 @@
         return haystack.includes(query);
       });
 
-      if (!items.length && query) {
-        return '';
-      }
+      if (!items.length && query) return '';
 
       visibleCount += items.length;
-
-      /*
-       * 搜索状态：
-       * 临时展开所有有匹配结果的大类
-       *
-       * 正常状态：
-       * 根据 collapsed 控制展开/收起
-       */
-      const isCollapsed = query
-        ? false
-        : Boolean(state.collapsed[group.key]);
+      const isCollapsed = query ? false : Boolean(state.collapsed[group.key]);
 
       const itemHtml = items.map(item => `
         <button
@@ -124,15 +103,17 @@
           data-doc-id="${escapeHtml(item.id)}"
           title="${escapeHtml(item.title)}"
         >
-          <span class="nav-icon" aria-hidden="true">
-            ${escapeHtml(item.icon || '•')}
-          </span>
-
-          <span class="nav-label">
-            ${escapeHtml(item.title)}
-          </span>
+          <span class="nav-icon" aria-hidden="true">${escapeHtml(item.icon || '•')}</span>
+          <span class="nav-label">${escapeHtml(item.title)}</span>
         </button>
       `).join('');
+
+      const discoveryNote =
+        group.key === 'daily' &&
+        state.dailyDiscoveryError &&
+        !query
+          ? `<div class="nav-note">${escapeHtml(state.dailyDiscoveryError)}</div>`
+          : '';
 
       return `
         <section
@@ -148,9 +129,9 @@
             <span class="chevron" aria-hidden="true">▼</span>
             <span>${escapeHtml(group.title)}</span>
           </button>
-
           <div class="nav-items">
             ${itemHtml}
+            ${discoveryNote}
           </div>
         </section>
       `;
@@ -167,68 +148,138 @@
 
   function enhanceMarkdown(root) {
     root.querySelectorAll('table').forEach(table => {
-      if (
-        table.parentElement?.classList.contains('table-wrap')
-      ) {
-        return;
-      }
+      if (table.parentElement?.classList.contains('table-wrap')) return;
 
       const wrap = document.createElement('div');
       wrap.className = 'table-wrap';
-
       table.parentNode.insertBefore(wrap, table);
       wrap.appendChild(table);
     });
   }
 
   function extractTitle(markdown, fallbackTitle) {
-    const lines = markdown
-      .replace(/^\uFEFF/, '')
-      .split(/\r?\n/);
-
-    const index = lines.findIndex(line =>
-      /^#\s+/.test(line)
-    );
+    const lines = markdown.replace(/^\uFEFF/, '').split(/\r?\n/);
+    const index = lines.findIndex(line => /^#\s+/.test(line));
 
     if (index === -1) {
-      return {
-        title: fallbackTitle,
-        body: markdown
-      };
+      return { title: fallbackTitle, body: markdown };
     }
 
-    const title =
-      lines[index]
-        .replace(/^#\s+/, '')
-        .trim() || fallbackTitle;
-
+    const title = lines[index].replace(/^#\s+/, '').trim() || fallbackTitle;
     lines.splice(index, 1);
 
     return {
       title,
-      body: lines
-        .join('\n')
-        .replace(/^\s+/, '')
+      body: lines.join('\n').replace(/^\s+/, '')
     };
   }
 
-  async function loadDocument(id, pushHash = false) {
-    const item =
-      findItem(id) ||
-      getAllItems()[0];
+  function getGitHubConfig() {
+    const config = state.manifest?.github || {};
 
+    if (config.owner && config.repo) {
+      return {
+        owner: config.owner,
+        repo: config.repo,
+        branch: config.branch || 'main',
+        dailyPath: config.dailyPath || 'daily'
+      };
+    }
+
+    // GitHub Pages 默认域名下可自动推导 owner / repo。
+    if (location.hostname.endsWith('.github.io')) {
+      const owner = location.hostname.split('.')[0];
+      const firstPath = location.pathname.split('/').filter(Boolean)[0];
+      const repo = firstPath || `${owner}.github.io`;
+
+      return {
+        owner,
+        repo,
+        branch: 'main',
+        dailyPath: 'daily'
+      };
+    }
+
+    return null;
+  }
+
+  async function discoverDailyItems() {
+    const dailyGroup = getGroups().find(group => group.key === 'daily');
+    if (!dailyGroup) return;
+
+    const config = getGitHubConfig();
+    if (!config) {
+      state.dailyDiscoveryError = '未配置 GitHub 仓库，历史复盘暂未自动加载。';
+      return;
+    }
+
+    const apiUrl =
+      `https://api.github.com/repos/${encodeURIComponent(config.owner)}` +
+      `/${encodeURIComponent(config.repo)}/contents/${encodeURI(config.dailyPath)}` +
+      `?ref=${encodeURIComponent(config.branch)}`;
+
+    try {
+      const response = await fetch(apiUrl, {
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/vnd.github+json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = new Error(`GitHub API HTTP ${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
+
+      const entries = await response.json();
+      if (!Array.isArray(entries)) {
+        throw new Error('GitHub API 返回格式异常');
+      }
+
+      const dynamicItems = entries
+        .filter(entry =>
+          entry.type === 'file' &&
+          /^\d{4}-\d{2}-\d{2}\.md$/i.test(entry.name)
+        )
+        .sort((a, b) => b.name.localeCompare(a.name))
+        .map(entry => {
+          const date = entry.name.replace(/\.md$/i, '');
+          return {
+            id: `daily-${date.replaceAll('-', '')}`,
+            file: `${config.dailyPath}/${entry.name}`,
+            downloadUrl: entry.download_url || '',
+            title: date,
+            icon: '📅',
+            keywords: [date, '复盘', '每日复盘'],
+            updated: date
+          };
+        });
+
+      // index.json 只保留模板等固定项目；日期文件由 GitHub 目录自动生成。
+      const fixedItems = dailyGroup.items.filter(item => !/^daily-\d{8}$/.test(item.id));
+      dailyGroup.items = [...fixedItems, ...dynamicItems];
+      state.dailyDiscoveryError = '';
+    } catch (error) {
+      console.warn('每日复盘自动发现失败：', error);
+
+      if (error.status === 403) {
+        state.dailyDiscoveryError = 'GitHub API 暂时受限，刷新后可重试。';
+      } else if (error.status === 404) {
+        state.dailyDiscoveryError = '未找到 daily 目录，请检查 data/index.json 中的 GitHub 配置。';
+      } else {
+        state.dailyDiscoveryError = '历史复盘暂未自动加载；模板和其他文档仍可正常使用。';
+      }
+    }
+  }
+
+  async function loadDocument(id, pushHash = false) {
+    const item = findItem(id) || getAllItems()[0];
     if (!item) return;
 
-    /*
-     * 当前文章所属的大类自动展开，
-     * 其他所有大类自动收起
-     */
     state.currentId = item.id;
-
     showOnlyGroup(item.groupKey);
-
     saveCollapsedState();
-
     renderNav();
 
     els.document.innerHTML = `
@@ -239,490 +290,181 @@
     `;
 
     try {
-      const response = await fetch(
-        encodeURI(item.file),
-        {
-          cache: 'no-store'
-        }
-      );
+      const source = item.downloadUrl || item.file;
+      const response = await fetch(source, { cache: 'no-store' });
 
       if (!response.ok) {
-        throw new Error(
-          `HTTP ${response.status}`
-        );
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      const markdown =
-        await response.text();
-
-      const {
-        title,
-        body
-      } = extractTitle(
-        markdown,
-        item.title
-      );
-
-      const updated =
-        item.updated ||
-        state.manifest.updated ||
-        '';
-
-      const parser =
-        window.marked?.parse
-          ? window.marked.parse
-          : window.marked;
+      const markdown = await response.text();
+      const { title, body } = extractTitle(markdown, item.title);
+      const updated = item.updated || state.manifest.updated || '';
+      const parser = window.marked?.parse ? window.marked.parse : window.marked;
 
       if (typeof parser !== 'function') {
-        throw new Error(
-          'Markdown 解析器未加载'
-        );
+        throw new Error('Markdown 解析器未加载');
       }
 
       els.document.innerHTML = `
         <header class="doc-header">
-
-          <h1>
-            ${escapeHtml(title)}
-          </h1>
-
+          <h1>${escapeHtml(title)}</h1>
           <div class="doc-meta">
-
-            <span>
-              ${escapeHtml(item.groupTitle)}
-            </span>
-
-            ${
-              updated
-                ? `
-                  <span class="dot">·</span>
-
-                  <span>
-                    最后更新 ${escapeHtml(updated)}
-                  </span>
-                `
-                : ''
-            }
-
+            <span>${escapeHtml(item.groupTitle)}</span>
+            ${updated ? `
+              <span class="dot">·</span>
+              <span>最后更新 ${escapeHtml(updated)}</span>
+            ` : ''}
           </div>
-
         </header>
-
-        <div class="markdown-body">
-          ${parser(body)}
-        </div>
+        <div class="markdown-body">${parser(body)}</div>
       `;
 
-      enhanceMarkdown(
-        els.document
-      );
-
+      enhanceMarkdown(els.document);
       els.content.scrollTop = 0;
+      document.title = `${title} - A股投资研究知识库`;
 
-      document.title =
-        `${title} - A股投资研究知识库`;
-
-      if (
-        pushHash &&
-        location.hash !== `#${item.id}`
-      ) {
-        history.pushState(
-          null,
-          '',
-          `#${item.id}`
-        );
+      if (pushHash && location.hash !== `#${item.id}`) {
+        history.pushState(null, '', `#${item.id}`);
       }
-
     } catch (error) {
       console.error(error);
-
-      const fileMode =
-        location.protocol === 'file:';
+      const fileMode = location.protocol === 'file:';
 
       els.document.innerHTML = `
         <div class="error-panel">
-
-          <h2>
-            页面内容没有成功载入
-          </h2>
-
-          ${
-            fileMode
-              ? `
-                <p>
-                  这套页面是真正从
-                  <code>data/index.json</code>
-                  和 Markdown 文件读取内容，
-                  浏览器直接双击
-                  <code>index.html</code>
-                  时会阻止本地文件请求。
-                </p>
-
-                <p>
-                  请双击根目录的
-                  <code>run-preview.bat</code>，
-                  或通过 GitHub Pages /
-                  本地 Web 服务器预览。
-                </p>
-              `
-              : `
-                <p>
-                  未能读取
-                  <code>${escapeHtml(item.file)}</code>。
-                  请检查文件路径和服务器配置。
-                </p>
-              `
-          }
-
+          <h2>页面内容没有成功载入</h2>
+          ${fileMode ? `
+            <p>
+              当前是直接双击 <code>index.html</code> 的 <code>file://</code> 模式，
+              浏览器会限制页面通过 <code>fetch()</code> 读取本地 Markdown。
+            </p>
+            <p>
+              请在项目根目录运行 <code>python -m http.server 8000</code>，
+              然后访问 <code>http://localhost:8000</code>；部署到 GitHub Pages 后也可正常使用。
+            </p>
+          ` : `
+            <p>
+              未能读取 <code>${escapeHtml(item.file)}</code>。
+              请检查文件是否存在、路径是否正确，以及 GitHub Pages 是否已完成部署。
+            </p>
+          `}
         </div>
       `;
     }
   }
 
   function openSidebar() {
-    document.body.classList.add(
-      'sidebar-open'
-    );
-
-    els.menuButton.setAttribute(
-      'aria-expanded',
-      'true'
-    );
+    document.body.classList.add('sidebar-open');
+    els.menuButton.setAttribute('aria-expanded', 'true');
   }
 
   function closeSidebar() {
-    document.body.classList.remove(
-      'sidebar-open'
-    );
-
-    els.menuButton.setAttribute(
-      'aria-expanded',
-      'false'
-    );
+    document.body.classList.remove('sidebar-open');
+    els.menuButton.setAttribute('aria-expanded', 'false');
   }
 
   function bindEvents() {
+    els.navTree.addEventListener('click', event => {
+      const toggle = event.target.closest('[data-group-toggle]');
 
-    /*
-     * 左侧导航点击事件
-     */
-    els.navTree.addEventListener(
-      'click',
-      event => {
-
-        /*
-         * 点击大类标题
-         */
-        const toggle =
-          event.target.closest(
-            '[data-group-toggle]'
-          );
-
-        if (toggle) {
-
-          const key =
-            toggle.dataset.groupToggle;
-
-          /*
-           * 手风琴模式：
-           * 当前点击的大类展开，
-           * 其他大类全部收起
-           */
-          showOnlyGroup(key);
-
-          saveCollapsedState();
-
-          renderNav();
-
-          return;
-        }
-
-        /*
-         * 点击具体文章
-         */
-        const item =
-          event.target.closest(
-            '[data-doc-id]'
-          );
-
-        if (item) {
-
-          loadDocument(
-            item.dataset.docId,
-            true
-          );
-
-          /*
-           * 手机端打开文章后
-           * 自动关闭侧边栏
-           */
-          if (
-            window
-              .matchMedia(
-                '(max-width: 860px)'
-              )
-              .matches
-          ) {
-            closeSidebar();
-          }
-        }
-      }
-    );
-
-    /*
-     * 搜索
-     */
-    els.search.addEventListener(
-      'input',
-      () => {
-        state.query =
-          els.search.value;
-
+      if (toggle) {
+        showOnlyGroup(toggle.dataset.groupToggle);
+        saveCollapsedState();
         renderNav();
+        return;
       }
-    );
 
-    /*
-     * 手机端菜单
-     */
-    els.menuButton.addEventListener(
-      'click',
-      () => {
+      const item = event.target.closest('[data-doc-id]');
+      if (!item) return;
 
-        document.body.classList.contains(
-          'sidebar-open'
-        )
-          ? closeSidebar()
-          : openSidebar();
+      loadDocument(item.dataset.docId, true);
+
+      if (window.matchMedia('(max-width: 860px)').matches) {
+        closeSidebar();
       }
-    );
+    });
 
-    /*
-     * 遮罩
-     */
-    els.overlay.addEventListener(
-      'click',
-      closeSidebar
-    );
+    els.search.addEventListener('input', () => {
+      state.query = els.search.value;
+      renderNav();
+    });
 
-    /*
-     * 浏览器前进 / 后退
-     */
-    window.addEventListener(
-      'hashchange',
-      () => {
+    els.menuButton.addEventListener('click', () => {
+      document.body.classList.contains('sidebar-open')
+        ? closeSidebar()
+        : openSidebar();
+    });
 
-        const id =
-          location.hash.replace(
-            /^#/,
-            ''
-          );
+    els.overlay.addEventListener('click', closeSidebar);
 
-        if (
-          id &&
-          id !== state.currentId &&
-          findItem(id)
-        ) {
-          loadDocument(
-            id,
-            false
-          );
+    window.addEventListener('hashchange', () => {
+      const id = location.hash.replace(/^#/, '');
+      if (id && id !== state.currentId && findItem(id)) {
+        loadDocument(id, false);
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 860) closeSidebar();
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') closeSidebar();
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        els.search.focus();
+
+        if (window.matchMedia('(max-width: 860px)').matches) {
+          openSidebar();
         }
       }
-    );
-
-    /*
-     * 桌面端恢复时关闭移动端侧栏
-     */
-    window.addEventListener(
-      'resize',
-      () => {
-
-        if (
-          window.innerWidth > 860
-        ) {
-          closeSidebar();
-        }
-      }
-    );
-
-    /*
-     * 快捷键
-     */
-    document.addEventListener(
-      'keydown',
-      event => {
-
-        /*
-         * ESC 关闭侧栏
-         */
-        if (
-          event.key === 'Escape'
-        ) {
-          closeSidebar();
-        }
-
-        /*
-         * Ctrl + K
-         * 聚焦搜索框
-         */
-        if (
-          (
-            event.ctrlKey ||
-            event.metaKey
-          ) &&
-          event.key.toLowerCase() === 'k'
-        ) {
-
-          event.preventDefault();
-
-          els.search.focus();
-
-          if (
-            window
-              .matchMedia(
-                '(max-width: 860px)'
-              )
-              .matches
-          ) {
-            openSidebar();
-          }
-        }
-      }
-    );
+    });
   }
 
   async function init() {
-
-    /*
-     * 读取之前保存的菜单状态
-     */
     loadCollapsedState();
-
-    /*
-     * 绑定事件
-     */
     bindEvents();
 
     try {
+      const response = await fetch('data/index.json', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      /*
-       * 读取知识库索引
-       */
-      const response =
-        await fetch(
-          'data/index.json',
-          {
-            cache: 'no-store'
-          }
-        );
+      state.manifest = await response.json();
+      await discoverDailyItems();
 
-      if (!response.ok) {
-        throw new Error(
-          `HTTP ${response.status}`
-        );
-      }
-
-      state.manifest =
-        await response.json();
-
-      /*
-       * 顶部版本信息
-       */
       els.topbarMeta.textContent =
-        `个人长期积累 · Markdown 驱动 · v${
-          state.manifest.version ||
-          '1.0.0'
-        }`;
+        `个人长期积累 · Markdown 驱动 · v${state.manifest.version || '1.1.0'}`;
 
-      /*
-       * 判断 URL 中是否指定文章
-       */
-      const requested =
-        location.hash.replace(
-          /^#/,
-          ''
-        );
+      const requested = location.hash.replace(/^#/, '');
+      const initialId = findItem(requested)
+        ? requested
+        : (state.manifest.default || getAllItems()[0]?.id);
 
-      /*
-       * 优先级：
-       *
-       * 1. URL #文章ID
-       * 2. index.json 中 default
-       * 3. 第一篇文章
-       */
-      const initialId =
-        findItem(requested)
-          ? requested
-          : (
-              state.manifest.default ||
-              getAllItems()[0]?.id
-            );
-
-      /*
-       * loadDocument 内部会自动：
-       *
-       * 1. 找到文章所属大类
-       * 2. 展开这个大类
-       * 3. 收起其他所有大类
-       *
-       * 因此默认打开第一篇文章时，
-       * 左侧也只会展开第一个大类。
-       */
-      await loadDocument(
-        initialId,
-        Boolean(
-          !requested &&
-          initialId
-        )
-      );
-
+      await loadDocument(initialId, Boolean(!requested && initialId));
     } catch (error) {
-
       console.error(error);
-
-      const fileMode =
-        location.protocol === 'file:';
+      const fileMode = location.protocol === 'file:';
 
       els.document.innerHTML = `
         <div class="error-panel">
-
-          <h2>
-            知识库索引没有成功载入
-          </h2>
-
-          ${
-            fileMode
-              ? `
-                <p>
-                  当前是直接双击 HTML 的
-                  <code>file://</code>
-                  模式。
-                  为了保持“Markdown 真正驱动”，
-                  页面需要通过本地 Web 服务读取文件。
-                </p>
-
-                <p>
-                  请双击根目录
-                  <code>run-preview.bat</code>，
-                  浏览器会自动打开预览页面。
-                </p>
-              `
-              : `
-                <p>
-                  请检查
-                  <code>data/index.json</code>
-                  是否存在、
-                  JSON 格式是否正确。
-                </p>
-              `
-          }
-
+          <h2>知识库索引没有成功载入</h2>
+          ${fileMode ? `
+            <p>
+              当前是 <code>file://</code> 模式。由于页面使用 <code>fetch()</code> 读取 Markdown，
+              请在项目根目录运行 <code>python -m http.server 8000</code>，
+              再访问 <code>http://localhost:8000</code>。
+            </p>
+          ` : `
+            <p>
+              请检查 <code>data/index.json</code> 是否存在且 JSON 格式正确。
+            </p>
+          `}
         </div>
       `;
     }
   }
 
   init();
-
 })();

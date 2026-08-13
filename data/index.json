@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "updated": "2026-08-06",
+  "version": "1.1.0",
+  "updated": "2026-08-13",
   "default": "global-01",
   "groups": [
     {
@@ -247,48 +247,23 @@
         {
           "id": "daily-template",
           "file": "daily/每日复盘模板.md",
-          "title": "每日复盘模板",
+          "title": "每日复盘 AI 模板",
           "icon": "📋",
           "keywords": [
             "模板",
-            "复盘"
+            "复盘",
+            "AI",
+            "每日复盘"
           ],
-          "updated": "2026-08-06"
-        },
-        {
-          "id": "daily-20260804",
-          "file": "daily/2026-08-04.md",
-          "title": "2026-08-04",
-          "icon": "📅",
-          "keywords": [
-            "2026-08-04",
-            "复盘"
-          ],
-          "updated": "2026-08-06"
-        },
-        {
-          "id": "daily-20260805",
-          "file": "daily/2026-08-05.md",
-          "title": "2026-08-05",
-          "icon": "📅",
-          "keywords": [
-            "2026-08-05",
-            "复盘"
-          ],
-          "updated": "2026-08-06"
-        },
-        {
-          "id": "daily-20260806",
-          "file": "daily/2026-08-06.md",
-          "title": "2026-08-06",
-          "icon": "📅",
-          "keywords": [
-            "2026-08-06",
-            "复盘"
-          ],
-          "updated": "2026-08-06"
+          "updated": "2026-08-13"
         }
       ]
     }
-  ]
+  ],
+  "github": {
+    "owner": "coowinit",
+    "repo": "ai-stock-research",
+    "branch": "main",
+    "dailyPath": "daily"
+  }
 }
