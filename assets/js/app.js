@@ -16,7 +16,8 @@
     search: document.getElementById('searchInput'),
     menuButton: document.getElementById('menuButton'),
     overlay: document.getElementById('sidebarOverlay'),
-    topbarMeta: document.getElementById('topbarMeta')
+    topbarMeta: document.getElementById('topbarMeta'),
+    sidebarFooter: document.getElementById('sidebarFooter')
   };
 
   function escapeHtml(value = '') {
@@ -144,6 +145,32 @@
         </div>
       `;
     }
+  }
+
+
+  function renderSidebarFooter(item) {
+    if (!els.sidebarFooter) return;
+
+    const maintenance = item?.maintenance;
+    if (!maintenance?.steps?.length) {
+      els.sidebarFooter.innerHTML = `
+        <span class="footer-default">只做一个阅读页面，内容由 Markdown 驱动</span>
+      `;
+      return;
+    }
+
+    const steps = maintenance.steps.map(step => `
+      <div class="footer-step">
+        <span class="footer-label">${escapeHtml(step.label || '')}</span>
+        <code>${escapeHtml(step.file || '')}</code>
+        ${step.note ? `<span class="footer-note">${escapeHtml(step.note)}</span>` : ''}
+      </div>
+    `).join('');
+
+    els.sidebarFooter.innerHTML = `
+      <div class="footer-title">${escapeHtml(maintenance.title || '维护说明')}</div>
+      ${steps}
+    `;
   }
 
   function enhanceMarkdown(root) {
@@ -278,6 +305,7 @@
     if (!item) return;
 
     state.currentId = item.id;
+    renderSidebarFooter(item);
     showOnlyGroup(item.groupKey);
     saveCollapsedState();
     renderNav();
@@ -435,7 +463,7 @@
       await discoverDailyItems();
 
       els.topbarMeta.textContent =
-        `个人长期积累 · Markdown 驱动 · v${state.manifest.version || '1.1.0'}`;
+        `个人长期积累 · Markdown 驱动 · v${state.manifest.version || '1.1.1'}`;
 
       const requested = location.hash.replace(/^#/, '');
       const initialId = findItem(requested)

@@ -233,13 +233,45 @@ button { color: inherit; }
 }
 .sidebar-footer {
   flex: 0 0 auto;
+  max-height: 36vh;
+  overflow-y: auto;
   padding: 11px 14px 12px;
   border-top: 1px solid var(--border-soft);
-  color: #8b93a0;
+  color: #7d8694;
   font-size: 10.5px;
-  line-height: 1.55;
+  line-height: 1.48;
+  scrollbar-width: thin;
 }
 .sidebar-footer span { display: block; }
+.footer-title {
+  margin-bottom: 8px;
+  color: #4b5563;
+  font-size: 11px;
+  font-weight: 700;
+}
+.footer-step + .footer-step { margin-top: 8px; }
+.footer-label {
+  margin-bottom: 2px;
+  color: #6b7280;
+  font-weight: 650;
+}
+.sidebar-footer code {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 4px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #4b5563;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9.8px;
+  overflow-wrap: anywhere;
+}
+.footer-note {
+  margin-top: 2px;
+  color: #969eaa;
+}
+.footer-default { color: #8b93a0; }
 
 .content {
   flex: 1;
@@ -453,7 +485,7 @@ button { color: inherit; }
   .markdown-body blockquote { padding: 11px 13px; }
 }
 
-/* v1.1.0: daily Markdown auto-discovery status */
+/* v1.1.1: daily Markdown auto-discovery status */
 .nav-note {
   margin: 4px 13px 8px 25px;
   padding: 7px 9px;
