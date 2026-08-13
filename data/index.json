@@ -108,10 +108,6 @@
               {
                 "label": "修改研究模板",
                 "file": "stocks/重点股票AI研究模板.md"
-              },
-              {
-                "label": "加入每日跟踪",
-                "file": "daily/每日复盘模板.md"
               }
             ]
           }
