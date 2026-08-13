@@ -95,27 +95,23 @@
           ],
           "updated": "2026-08-13",
           "maintenance": {
-            "title": "重点股票怎么维护",
+            "title": "需要修改的文件",
             "steps": [
               {
                 "label": "首次新增",
-                "file": "stocks/代码-名称.md",
-                "note": "AI研究并核验后保存；同时在 data/index.json 的 stocks.items 增加导航项。"
+                "file": "stocks/代码-名称.md + data/index.json"
               },
               {
                 "label": "已有股票更新",
-                "file": "stocks/代码-名称.md",
-                "note": "直接修改对应股票档案；如需同步“最后更新”日期，再改 data/index.json。"
+                "file": "stocks/代码-名称.md"
               },
               {
-                "label": "修改研究规则",
-                "file": "stocks/重点股票AI研究模板.md",
-                "note": "只调整首次建档模板；不需要修改 JavaScript。"
+                "label": "修改研究模板",
+                "file": "stocks/重点股票AI研究模板.md"
               },
               {
                 "label": "加入每日跟踪",
-                "file": "daily/每日复盘模板.md",
-                "note": "把新股票加入“当前重点研究池”。"
+                "file": "daily/每日复盘模板.md"
               }
             ]
           }
@@ -282,22 +278,15 @@
           ],
           "updated": "2026-08-13",
           "maintenance": {
-            "title": "每日复盘怎么维护",
+            "title": "需要修改的文件",
             "steps": [
               {
                 "label": "每天更新",
-                "file": "daily/YYYY-MM-DD.md",
-                "note": "复制模板给 AI，核验结果后只上传这一份日期 Markdown。"
+                "file": "daily/YYYY-MM-DD.md"
               },
               {
-                "label": "修改复盘规则",
-                "file": "daily/每日复盘模板.md",
-                "note": "只有研究框架或 AI 提问规则变化时才修改。"
-              },
-              {
-                "label": "无需修改",
-                "file": "data/index.json / HTML / JS",
-                "note": "每日日期由页面自动发现，不再维护 daily 索引。"
+                "label": "修改复盘模板",
+                "file": "daily/每日复盘模板.md"
               }
             ]
           }
